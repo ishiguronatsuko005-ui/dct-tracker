@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>DCT準備トラッカー</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic', sans-serif; background: #f0f2f5; min-height: 100vh; }
+
+.header { background: #1a3a5c; color: white; padding: 16px 20px 14px; }
+.header h1 { font-size: 17px; font-weight: 700; letter-spacing: 0.5px; }
+.header .date { font-size: 12px; opacity: 0.75; margin-top: 3px; }
+
+.stats-bar { background: white; display: flex; border-bottom: 1px solid #e8e8e8; }
+.stat { flex: 1; text-align: center; padding: 12px 4px; border-right: 1px solid #f0f0f0; }
+.stat:last-child { border-right: none; }
+.stat-num { font-size: 26px; font-weight: 800; color: #1a3a5c; line-height: 1; }
+.stat-label { font-size: 10px; color: #aaa; margin-top: 3px; }
+
+.section { background: white; margin: 10px 12px; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+.section-title { font-size: 12px; color: #888; font-weight: 600; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+.habit { display: flex; align-items: center; padding: 11px 0; border-bottom: 1px solid #f5f5f5; gap: 12px; cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none; }
+.habit:last-child { border-bottom: none; padding-bottom: 0; }
+.habit:first-child { padding-top: 0; }
+
+.check { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #ddd; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+.habit.done .check { background: #2e7d32; border-color: #2e7d32; }
+.checkmark { display: none; }
+.habit.done .checkmark { display: block; color: white; font-size: 15px; font-weight: bold; }
+
+.habit-info { flex: 1; }
+.habit-name { font-size: 15px; color: #222; }
+.habit-name.done-text { color: #888; text-decoration: line-through; }
+.habit-sub { font-size: 11px; color: #bbb; margin-top: 2px; }
+
+.progress-bar { height: 6px; background: #f0f0f0; border-radius: 3px; margin-top: 10px; overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, #1a3a5c, #2e7d32); border-radius: 3px; transition: width 0.3s; }
+
+.calendar { margin-top: 4px; }
+.cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); margin-bottom: 4px; }
+.cal-weekday { text-align: center; font-size: 10px; color: #ccc; padding: 2px 0; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.cal-cell { aspect-ratio: 1; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 11px; background: #f7f7f7; color: #ccc; }
+.cal-cell.has-1 { background: #e8f5e9; color: #66bb6a; }
+.cal-cell.has-2 { background: #c8e6c9; color: #388e3c; }
+.cal-cell.has-3 { background: #a5d6a7; color: #2e7d32; }
+.cal-cell.has-full { background: #2e7d32; color: white; font-weight: bold; }
+.cal-cell.today { outline: 2px solid #1a3a5c; outline-offset: -2px; }
+.cal-cell.future { background: transparent; color: #e0e0e0; }
+
+.memo-area { width: 100%; border: 1.5px solid #e8e8e8; border-radius: 8px; padding: 10px 12px; font-size: 14px; font-family: inherit; min-height: 80px; resize: vertical; color: #333; background: #fafafa; }
+.memo-area:focus { outline: none; border-color: #1a3a5c; background: white; }
+.save-btn { width: 100%; margin-top: 8px; padding: 11px; background: #1a3a5c; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.save-btn:active { opacity: 0.8; }
+.saved-msg { text-align: center; font-size: 12px; color: #2e7d32; margin-top: 6px; display: none; }
+
+.month-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.month-nav button { background: none; border: none; font-size: 18px; color: #888; cursor: pointer; padding: 4px 10px; -webkit-tap-highlight-color: transparent; }
+.month-label { font-size: 13px; color: #555; font-weight: 600; }
+
+.legend { display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+.leg { display: flex; align-items: center; gap: 4px; font-size: 10px; color: #999; }
+.leg-dot { width: 10px; height: 10px; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>DCT準備トラッカー</h1>
+  <div class="date" id="header-date"></div>
+</div>
+
+<div class="stats-bar">
+  <div class="stat">
+    <div class="stat-num" id="stat-streak">0</div>
+    <div class="stat-label">連続日数</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num" id="stat-total">0</div>
+    <div class="stat-label">累計実施日</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num" id="stat-today">0/5</div>
+    <div class="stat-label">今日の完了</div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">今日のタスク</div>
+  <div id="habits"></div>
+  <div class="progress-bar"><div class="progress-fill" id="progress" style="width:0%"></div></div>
+</div>
+
+<div class="section">
+  <div class="month-nav">
+    <button onclick="changeMonth(-1)">&#8249;</button>
+    <span class="month-label" id="month-label"></span>
+    <button onclick="changeMonth(1)">&#8250;</button>
+  </div>
+  <div class="calendar">
+    <div class="cal-weekdays">
+      <div class="cal-weekday">日</div>
+      <div class="cal-weekday">月</div>
+      <div class="cal-weekday">火</div>
+      <div class="cal-weekday">水</div>
+      <div class="cal-weekday">木</div>
+      <div class="cal-weekday">金</div>
+      <div class="cal-weekday">土</div>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
+  </div>
+  <div class="legend">
+    <div class="leg"><div class="leg-dot" style="background:#e8f5e9"></div>1項目</div>
+    <div class="leg"><div class="leg-dot" style="background:#c8e6c9"></div>2〜3項目</div>
+    <div class="leg"><div class="leg-dot" style="background:#2e7d32"></div>全完了</div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">今日のメモ・気づき</div>
+  <textarea class="memo-area" id="memo" placeholder="難しかった英語表現、気づき、明日やること…"></textarea>
+  <button class="save-btn" onclick="saveMemo()">保存</button>
+  <div class="saved-msg" id="saved-msg">保存しました ✓</div>
+</div>
+
+<script>
+const HABITS = [
+  { id: 'writing',   name: 'ライティング',  sub: '英文メール1通・AIで添削' },
+  { id: 'listening', name: 'リスニング',    sub: 'YouTube英語動画・音声10分' },
+  { id: 'speaking',  name: 'スピーキング',  sub: 'ChatGPT音声モードで会話' },
+  { id: 'reading',   name: 'リーディング', sub: 'PubMedアブストラクトを1本' },
+  { id: 'icr',       name: 'ICRweb',       sub: '1講座視聴' },
+];
+
+let calYear, calMonth;
+
+const today = new Date();
+calYear  = today.getFullYear();
+calMonth = today.getMonth();
+
+const todayStr = () => { const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const dateStr  = (y, m, d) => `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+
+function getData() { return JSON.parse(localStorage.getItem('dct') || '{}'); }
+function saveData(d) { localStorage.setItem('dct', JSON.stringify(d)); }
+function getMemos() { return JSON.parse(localStorage.getItem('dct_memos') || '{}'); }
+
+function toggleHabit(id) {
+  const data = getData();
+  const key  = todayStr();
+  if (!data[key]) data[key] = [];
+  const i = data[key].indexOf(id);
+  if (i >= 0) data[key].splice(i, 1);
+  else data[key].push(id);
+  saveData(data);
+  render();
+}
+
+function render() {
+  // Header
+  document.getElementById('header-date').textContent =
+    today.toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+
+  const data    = getData();
+  const todayDone = data[todayStr()] || [];
+
+  // Stats
+  const allDays = Object.keys(data).filter(k => data[k].length > 0).sort();
+  document.getElementById('stat-total').textContent = allDays.length;
+  document.getElementById('stat-today').textContent = `${todayDone.length}/${HABITS.length}`;
+
+  // Streak
+  let streak = 0;
+  const d = new Date(today);
+  while (true) {
+    const k = d.toISOString().slice(0, 10);
+    if (data[k] && data[k].length > 0) { streak++; d.setDate(d.getDate() - 1); }
+    else break;
+  }
+  document.getElementById('stat-streak').textContent = streak;
+
+  // Habits
+  const list = document.getElementById('habits');
+  list.innerHTML = '';
+  HABITS.forEach(h => {
+    const done = todayDone.includes(h.id);
+    const el   = document.createElement('div');
+    el.className = 'habit' + (done ? ' done' : '');
+    el.innerHTML = `
+      <div class="check"><span class="checkmark">✓</span></div>
+      <div class="habit-info">
+        <div class="habit-name${done ? ' done-text' : ''}">${h.name}</div>
+        <div class="habit-sub">${h.sub}</div>
+      </div>`;
+    el.onclick = () => toggleHabit(h.id);
+    list.appendChild(el);
+  });
+
+  // Progress bar
+  document.getElementById('progress').style.width =
+    `${Math.round(todayDone.length / HABITS.length * 100)}%`;
+
+  // Calendar
+  renderCalendar(data);
+
+  // Memo
+  const memos = getMemos();
+  document.getElementById('memo').value = memos[todayStr()] || '';
+}
+
+function renderCalendar(data) {
+  document.getElementById('month-label').textContent =
+    `${calYear}年${calMonth + 1}月`;
+
+  const grid = document.getElementById('cal-grid');
+  grid.innerHTML = '';
+
+  const firstDay    = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const todayS      = todayStr();
+
+  for (let i = 0; i < firstDay; i++) {
+    grid.appendChild(document.createElement('div'));
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const ds    = dateStr(calYear, calMonth, day);
+    const count = (data[ds] || []).length;
+    const isTod = ds === todayS;
+    const isFut = ds > todayS;
+
+    const cell = document.createElement('div');
+    let cls = 'cal-cell';
+    if (!isFut) {
+      if (count >= HABITS.length) cls += ' has-full';
+      else if (count >= 3)        cls += ' has-3';
+      else if (count >= 2)        cls += ' has-2';
+      else if (count >= 1)        cls += ' has-1';
+    } else {
+      cls += ' future';
+    }
+    if (isTod) cls += ' today';
+    cell.className = cls;
+    cell.textContent = day;
+    grid.appendChild(cell);
+  }
+}
+
+function changeMonth(delta) {
+  calMonth += delta;
+  if (calMonth < 0)  { calMonth = 11; calYear--; }
+  if (calMonth > 11) { calMonth = 0;  calYear++; }
+  const data = getData();
+  renderCalendar(data);
+  document.getElementById('month-label').textContent = `${calYear}年${calMonth+1}月`;
+}
+
+function saveMemo() {
+  const memos = getMemos();
+  memos[todayStr()] = document.getElementById('memo').value;
+  localStorage.setItem('dct_memos', JSON.stringify(memos));
+  const msg = document.getElementById('saved-msg');
+  msg.style.display = 'block';
+  setTimeout(() => { msg.style.display = 'none'; }, 2000);
+}
+
+render();
+</script>
+</body>
+</html>
